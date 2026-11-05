@@ -330,7 +330,12 @@ function drawUsers() {
       el("td", {}, el("button", { class: locked ? "" : "danger", onclick: () => {
         if (!locked && !confirm(`Lock out ${u.device || "this phone"}? Juno goes back to the activation screen next time it opens.`)) return;
         setDevice(u.device_id, { status: locked ? "active" : "revoked" });
-      } }, locked ? "Let back in" : "Lock out")),
+      } }, locked ? "Let back in" : "Lock out"),
+        el("button", { class: "danger", style: "margin-left:6px", title: "Forget this phone: it goes back to the key screen and needs a new code", onclick: async () => {
+          if (!confirm(`Delete ${u.device || "this phone"}? The server forgets it: Juno asks for a key again and takes any new code. Its feedback stays.`)) return;
+          const { error } = await sb.from("devices").delete().eq("device_id", u.device_id);
+          if (error) return fail(error); toast("Deleted"); loadUsers();
+        } }, "Delete")),
     );
   }));
 }
@@ -359,7 +364,12 @@ function drawCodes() {
       el("td", {}, el("button", { class: c.revoked ? "" : "danger", title: c.revoked ? "" : "Phones already in keep their access", onclick: async () => {
         const { error } = await sb.from("invite_codes").update({ revoked: !c.revoked }).eq("code", c.code);
         if (error) return fail(error); loadCodes();
-      } }, c.revoked ? "Reopen" : "Stop")),
+      } }, c.revoked ? "Reopen" : "Stop"),
+        el("button", { class: "danger", style: "margin-left:6px", title: "Remove the code for good; phones already in keep their access", onclick: async () => {
+          if (!confirm(`Delete ${c.code} for good? Nobody can use it again. Phones that came in with it keep working.`)) return;
+          const { error } = await sb.from("invite_codes").delete().eq("code", c.code);
+          if (error) return fail(error); toast("Deleted " + c.code); loadCodes(); loadUsers();
+        } }, "Delete")),
     );
   }));
 }
