@@ -449,7 +449,9 @@ async function readApk(file) {
     apk = { package: m.package, version_code: code, version_name: String(m.versionName || code), apk_size: file.size, apk_sha256: sha };
     info.replaceChildren(
       el("b", {}, "Juno "), el("b", {}, apk.version_name), ` (code ${code}) · ${mb(file.size)} · SHA-256 `, el("span", { class: "mono" }, sha.slice(0, 16) + "..."),
-      ...(code <= top ? [el("div", {}, `Code ${code} isn't above the newest published (${top}): phones won't take it. Raise versionCode in app/build.gradle.kts.`)] : []));
+      ...(code <= top ? [el("div", {}, code === top
+        ? `Code ${code} is already taken by a published build. Every build needs its own code, even in another channel (a phone switching channels only updates to a higher one): build this one with -Pjuno.code=${top + 1}.`
+        : `Code ${code} is below the newest published (${top}): phones won't take it. Build it with -Pjuno.code=${top + 1}.`)] : []));
     if (code <= top) { info.className = "apkinfo wide bad"; return; }
     $("rel-publish").disabled = false;
   } catch (e) {
