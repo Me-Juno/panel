@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Juno Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rowdies:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Juno's palette (donate site / checkout): warm ink ground, cream text, Juno blue for actions */
+  :root {
+    --ground: #1A1210; --surface: #251A16; --surface-2: #2F221C; --line: #4A3A30; --line-soft: #3A2D26;
+    --text: #F3E6D3; --muted: #B8A48E; --dim: #8C7867;
+    --act: #3567D8; --act-hover: #2B57BD; --gold: #F7D774; --ok: #5DBB7A; --bad: #E2675C;
+    --radius: 10px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }   /* our own display rules must never beat hidden */
+  body { margin: 0; background: var(--ground); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1, h2, .brand { font-family: Rowdies, system-ui, sans-serif; font-weight: 700; margin: 0; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--surface-2); border-radius: 8px; padding: 7px 12px; }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--act); outline-offset: 2px; }
+  button.primary { background: var(--act); border-color: var(--act); color: #fff; font-weight: 600; }
+  button.primary:hover { background: var(--act-hover); }
+  button.danger { color: var(--bad); }
+  button:disabled { opacity: .5; cursor: default; }
+  input, select { background: var(--ground); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  label { display: grid; gap: 4px; color: var(--muted); font-size: 13px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-inline: 16px; }
+
+  /* sign-in */
+  #login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+  #login form { width: min(360px, 100%); background: var(--surface); border: 1px solid var(--line-soft); border-radius: 14px; padding: 28px; display: grid; gap: 14px; }
+  #login .brand { font-size: 34px; text-align: center; }
+  #login .brand span { color: var(--gold); }
+  .msg { min-height: 1.4em; color: var(--bad); font-size: 14px; margin: 0; }
+
+  /* app */
+  header.top { border-bottom: 1px solid var(--line-soft); background: var(--surface); position: sticky; top: 0; z-index: 2; }
+  header.top .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
+  header.top .brand { font-size: 22px; }
+  header.top .brand span { color: var(--gold); }
+  nav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+  nav button { border: 0; background: none; padding: 8px 12px; color: var(--muted); border-radius: 8px; white-space: nowrap; }
+  nav button[aria-selected="true"] { color: var(--text); background: var(--surface-2); }
+  nav .count { color: var(--dim); font-variant-numeric: tabular-nums; margin-left: 4px; }
+  .who { color: var(--dim); font-size: 13px; white-space: nowrap; }
+  main { padding-block: 24px 60px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+  .bar h2 { font-size: 22px; margin-right: auto; }
+  .stats { display: flex; gap: 20px; color: var(--muted); font-size: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .table { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+  .sub { color: var(--dim); font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+  .pill.ok { color: var(--ok); } .pill.bad { color: var(--bad); } .pill.dev { color: var(--gold); } .pill.beta { color: var(--muted); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--dim); }
+  td select { padding: 4px 8px; }
+
+  .newcode { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 16px; }
+  .newcode label.note { flex: 1 1 220px; }
+  .newcode input[type=number] { width: 90px; }
+  .made { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface-2); border: 1px dashed var(--gold); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+  .made .code { font-family: ui-monospace, Consolas, monospace; font-size: 22px; color: var(--gold); letter-spacing: .06em; }
+
+  .release-form .wide { flex: 1 1 100%; }
+  .release-form textarea { background: var(--ground); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; color: inherit; resize: vertical; }
+  .apkinfo { color: var(--muted); font-size: 14px; background: var(--ground); border: 1px dashed var(--line); border-radius: 8px; padding: 10px 12px; }
+  .apkinfo b { color: var(--text); }
+  .apkinfo.bad { color: var(--bad); border-color: var(--bad); }
+  .channels { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 10px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 0; }
+  .channels legend { color: var(--muted); font-size: 13px; padding: 0 4px; }
+  .channels label { display: flex; flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
+  .channels .custom input { width: 160px; }
+  .changes summary { cursor: pointer; color: var(--muted); }
+  .changes ul { margin: 6px 0 0; padding-left: 18px; }
+  .fb { display: grid; gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; }
+  .card .head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+  .card .title { font-weight: 600; }
+  .card .body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+  .card .meta { color: var(--dim); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; }
+  .files button { font-size: 12px; padding: 4px 10px; }
+  .pill.bug { color: var(--bad); } .pill.feedback { color: #7FB0E8; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; font-size: 14px; }
+  @media (max-width: 640px) { header.top .wrap { gap: 10px; } .who, #passwd { display: none; } }
+</style>
+</head>
+<body>
+
+<section id="login" hidden>
+  <form id="login-form">
+    <div class="brand">Juno <span>Admin</span></div>
+    <label>Email<input id="email" type="email" autocomplete="username" required></label>
+    <label>Password<input id="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Sign in</button>
+    <p class="msg" id="login-msg" role="alert"></p>
+  </form>
+</section>
+
+<section id="app" hidden>
+  <header class="top"><div class="wrap">
+    <div class="brand">Juno <span>Admin</span></div>
+    <nav role="tablist">
+      <button role="tab" data-tab="users" aria-selected="true">Users<span class="count" id="n-users"></span></button>
+      <button role="tab" data-tab="codes" aria-selected="false">Codes<span class="count" id="n-codes"></span></button>
+      <button role="tab" data-tab="releases" aria-selected="false">Releases<span class="count" id="n-releases"></span></button>
+      <button role="tab" data-tab="feedback" aria-selected="false">Feedback<span class="count" id="n-feedback"></span></button>
+    </nav>
+    <span class="who" id="who"></span>
+    <button id="passwd">Change password</button>
+    <button id="signout">Sign out</button>
+  </div></header>
+
+  <main class="wrap">
+    <div data-panel="users">
+      <div class="bar">
+        <h2>Users</h2>
+        <label>Search<input id="user-search" type="search" placeholder="phone, id, code, version"></label>
+        <button id="reload-users">Refresh</button>
+      </div>
+      <div class="stats" id="user-stats"></div>
+      <div class="table"><table>
+        <thead><tr><th>Phone</th><th>Role</th><th title="Which releases this phone is offered">Updates</th><th>Status</th><th>App</th><th>Code</th><th>Activated</th><th>Last seen</th><th></th></tr></thead>
+        <tbody id="users"></tbody>
+      </table></div>
+    </div>
+
+    <div data-panel="codes" hidden>
+      <div class="bar"><h2>Codes</h2><button id="reload-codes">Refresh</button></div>
+      <form class="newcode" id="code-form">
+        <label>Role<select id="code-role"><option value="beta">beta</option><option value="dev">dev (Debug tab)</option></select></label>
+        <label>Phones<input id="code-uses" type="number" min="1" max="10000" value="1" required></label>
+        <label class="note">Note<input id="code-note" type="text" maxlength="200" placeholder="who it's for, e.g. Discord batch 1"></label>
+        <button class="primary" type="submit">Make code</button>
+      </form>
+      <div class="made" id="made" hidden>
+        <span class="code" id="made-code"></span>
+        <button id="made-copy">Copy</button>
+        <span class="sub" id="made-info"></span>
+      </div>
+      <div class="table"><table>
+        <thead><tr><th>Code</th><th>Role</th><th>Used</th><th>Note</th><th>Made</th><th>Status</th><th></th></tr></thead>
+        <tbody id="codes"></tbody>
+      </table></div>
+    </div>
+
+    <div data-panel="releases" hidden>
+      <div class="bar"><h2>Releases</h2><button id="reload-releases">Refresh</button></div>
+      <form class="newcode release-form" id="rel-form">
+        <label class="wide">APK file<input id="rel-file" type="file" accept=".apk,application/vnd.android.package-archive" required></label>
+        <div class="apkinfo wide" id="rel-info">Pick the APK: I read its version and fingerprint here on your PC, nothing is uploaded.</div>
+        <label class="wide">Download link<input id="rel-url" type="url" placeholder="https://... where this exact file downloads from" required></label>
+        <fieldset class="wide channels" id="rel-channels">
+          <legend>Channels</legend>
+          <label><input type="checkbox" value="dev"> dev</label>
+          <label><input type="checkbox" value="beta" checked> beta</label>
+          <label><input type="checkbox" value="stable"> stable</label>
+          <label class="custom">custom <input id="rel-custom" type="text" placeholder="name, name" maxlength="80"></label>
+        </fieldset>
+        <label class="wide">Changes (one per line)<textarea id="rel-notes" rows="5" placeholder="Bear joins a second sooner&#10;Fixed the popup closer missing the X"></textarea></label>
+        <button class="primary" type="submit" id="rel-publish" disabled>Publish</button>
+        <span class="sub" id="rel-msg"></span>
+      </form>
+      <div class="table"><table>
+        <thead><tr><th>Version</th><th>Channels</th><th>Changes</th><th>Size</th><th>Published</th><th>Status</th><th></th></tr></thead>
+        <tbody id="releases"></tbody>
+      </table></div>
+    </div>
+
+    <div data-panel="feedback" hidden>
+      <div class="bar">
+        <h2>Feedback</h2>
+        <label>Show<select id="fb-kind"><option value="">everything</option><option value="bug">bugs</option><option value="feedback">feedback</option></select></label>
+        <button id="reload-feedback">Refresh</button>
+      </div>
+      <div class="fb" id="feedback"></div>
+    </div>
+  </main>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// Juno's server. The publishable key is public by design; everything here is guarded by sign-in plus
+// the database's admin rules (public.admins), so this page holds no secrets.
+const sb = supabase.createClient("https://xdqdqkqzxzbhrucrxeli.supabase.co", "sb_publishable_nYOmKEkemMdgWCcwzPvT8Q_ybdTszFb");
+const $ = (id) => document.getElementById(id);
+let users = [], codes = [];
+
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v !== undefined && v !== null) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined && k !== false) e.append(k instanceof Node ? k : String(k));
+  return e;
+}
+function toast(text) { const t = el("div", { class: "toast", role: "status" }, text); document.body.append(t); setTimeout(() => t.remove(), 2400); }
+function ago(iso) {
+  if (!iso) return "";
+  const s = (Date.now() - new Date(iso)) / 1000;
+  if (s < 60) return "just now"; if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago"; if (s < 86400 * 30) return Math.floor(s / 86400) + " d ago";
+  return new Date(iso).toLocaleDateString();
+}
+const day = (iso) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+async function copy(text) { try { await navigator.clipboard.writeText(text); toast("Copied " + text); } catch { toast("Couldn't copy, select it by hand"); } }
+function fail(error) { console.error(error); toast("Didn't work: " + (error.message || error)); }
+
+// ---------- sign-in ----------
+async function show() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { $("app").hidden = true; $("login").hidden = false; return; }
+  const { data: isAdmin, error } = await sb.rpc("is_admin");
+  if (error || !isAdmin) {
+    await sb.auth.signOut();
+    $("app").hidden = true; $("login").hidden = false;
+    $("login-msg").textContent = error ? "Can't reach the server." : "This account isn't on the admin list.";
+    return;
+  }
+  $("login").hidden = true; $("app").hidden = false;
+  $("who").textContent = session.user.email;
+  loadUsers(); loadCodes(); loadReleases(); loadFeedback();
+}
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); $("login-msg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("password").value });
+  if (error) { $("login-msg").textContent = "Wrong email or password."; return; }
+  $("password").value = ""; show();
+});
+$("signout").addEventListener("click", async () => { await sb.auth.signOut(); show(); });
+$("passwd").addEventListener("click", async () => {
+  const pw = prompt("New password (at least 12 characters):");
+  if (pw === null) return;
+  if (pw.length < 12) return toast("Too short: use at least 12 characters");
+  if (prompt("Type it again:") !== pw) return toast("They didn't match, nothing changed");
+  const { error } = await sb.auth.updateUser({ password: pw });
+  if (error) return fail(error);
+  toast("Password changed");
+});
+
+// ---------- tabs ----------
+document.querySelectorAll("nav [data-tab]").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll("nav [data-tab]").forEach((x) => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll("[data-panel]").forEach((p) => p.hidden = p.dataset.panel !== b.dataset.tab);
+  try { localStorage.setItem("juno-admin-tab", b.dataset.tab); } catch {}
+}));
+try { const t = localStorage.getItem("juno-admin-tab"); if (t) document.querySelector(`nav [data-tab="${t}"]`)?.click(); } catch {}
+
+// ---------- users ----------
+async function loadUsers() {
+  const { data, error } = await sb.from("devices").select("*").order("last_seen", { ascending: false });
+  if (error) return fail(error);
+  users = data; drawUsers();
+}
+async function setDevice(id, change) {
+  const { error } = await sb.from("devices").update(change).eq("device_id", id);
+  if (error) return fail(error);
+  toast("Saved. The phone picks it up next time Juno opens."); loadUsers();
+}
+function drawUsers() {
+  const q = $("user-search").value.trim().toLowerCase();
+  const list = users.filter((u) => !q || [u.device, u.device_id, u.code, u.app_version, u.role].join(" ").toLowerCase().includes(q));
+  const weekAgo = Date.now() - 7 * 86400e3;
+  $("n-users").textContent = users.length;
+  $("user-stats").replaceChildren(
+    el("span", {}, el("b", {}, users.filter((u) => u.status === "active").length), " active"),
+    el("span", {}, el("b", {}, users.filter((u) => new Date(u.last_seen) > weekAgo).length), " opened Juno this week"),
+    el("span", {}, el("b", {}, users.filter((u) => u.role === "dev").length), " dev"),
+    el("span", {}, el("b", {}, users.filter((u) => u.status === "revoked").length), " locked out"),
+  );
+  if (!list.length) { $("users").replaceChildren(el("tr", {}, el("td", { colspan: 9, class: "empty" }, users.length ? "Nobody matches that." : "No phones yet. Make a code and hand it out."))); return; }
+  $("users").replaceChildren(...list.map((u) => {
+    const role = el("select", { "aria-label": "Role", onchange: (e) => setDevice(u.device_id, { role: e.target.value }) },
+      el("option", { value: "beta" }, "beta"), el("option", { value: "dev" }, "dev"));
+    role.value = u.role;
+    // updates: follow the role (dev -> dev builds, beta -> beta), or a channel picked here, custom ones included
+    const known = ["dev", "beta", "stable"];
+    const chan = el("select", { "aria-label": "Update channel", onchange: (e) => {
+      let v = e.target.value;
+      if (v === "+") { v = (prompt("Custom channel name (letters, digits, - and _):") || "").trim().toLowerCase(); if (!/^[a-z0-9_-]{1,30}$/.test(v)) { drawUsers(); return; } }
+      setDevice(u.device_id, { channel: v === "" ? null : v });
+    } },
+      el("option", { value: "" }, `by role (${u.role})`), ...known.map((c) => el("option", { value: c }, c)),
+      u.channel && !known.includes(u.channel) ? el("option", { value: u.channel }, u.channel) : null,
+      el("option", { value: "+" }, "custom..."));
+    chan.value = u.channel || "";
+    const locked = u.status === "revoked";
+    return el("tr", {},
+      el("td", {}, u.device || "Unknown phone", el("div", { class: "sub mono", title: u.device_id }, u.device_id.slice(0, 12))),
+      el("td", {}, role),
+      el("td", {}, chan),
+      el("td", {}, el("span", { class: "pill " + (locked ? "bad" : "ok") }, locked ? "Locked out" : "Active")),
+      el("td", { class: "num" }, u.app_version || ""),
+      el("td", { class: "mono" }, u.code || ""),
+      el("td", { class: "num" }, day(u.activated_at)),
+      el("td", { class: "num", title: u.last_seen }, ago(u.last_seen)),
+      el("td", {}, el("button", { class: locked ? "" : "danger", onclick: () => {
+        if (!locked && !confirm(`Lock out ${u.device || "this phone"}? Juno goes back to the activation screen next time it opens.`)) return;
+        setDevice(u.device_id, { status: locked ? "active" : "revoked" });
+      } }, locked ? "Let back in" : "Lock out")),
+    );
+  }));
+}
+$("user-search").addEventListener("input", drawUsers);
+$("reload-users").addEventListener("click", loadUsers);
+
+// ---------- codes ----------
+async function loadCodes() {
+  const { data, error } = await sb.from("invite_codes").select("*").order("created_at", { ascending: false });
+  if (error) return fail(error);
+  codes = data; drawCodes();
+}
+function drawCodes() {
+  $("n-codes").textContent = codes.length;
+  if (!codes.length) { $("codes").replaceChildren(el("tr", {}, el("td", { colspan: 7, class: "empty" }, "No codes yet."))); return; }
+  $("codes").replaceChildren(...codes.map((c) => {
+    const full = c.uses >= c.max_uses;
+    const status = c.revoked ? ["bad", "Stopped"] : full ? ["beta", "Used up"] : ["ok", "Open"];
+    return el("tr", {},
+      el("td", { class: "mono" }, el("button", { title: "Copy", onclick: () => copy(c.code) }, c.code)),
+      el("td", {}, el("span", { class: "pill " + c.role }, c.role)),
+      el("td", { class: "num" }, `${c.uses} / ${c.max_uses}`),
+      el("td", {}, c.note || el("span", { class: "sub" }, "no note")),
+      el("td", { class: "num" }, day(c.created_at)),
+      el("td", {}, el("span", { class: "pill " + status[0] }, status[1])),
+      el("td", {}, el("button", { class: c.revoked ? "" : "danger", title: c.revoked ? "" : "Phones already in keep their access", onclick: async () => {
+        const { error } = await sb.from("invite_codes").update({ revoked: !c.revoked }).eq("code", c.code);
+        if (error) return fail(error); loadCodes();
+      } }, c.revoked ? "Reopen" : "Stop")),
+    );
+  }));
+}
+$("code-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const uses = Math.max(1, parseInt($("code-uses").value, 10) || 1);
+  const { data, error } = await sb.rpc("make_invite", { p_role: $("code-role").value, p_max_uses: uses, p_note: $("code-note").value.trim() || null });
+  if (error) return fail(error);
+  $("made").hidden = false; $("made-code").textContent = data;
+  $("made-info").textContent = `${$("code-role").value}, for ${uses} phone${uses > 1 ? "s" : ""}`;
+  $("code-note").value = ""; loadCodes();
+});
+$("made-copy").addEventListener("click", () => copy($("made-code").textContent));
+$("reload-codes").addEventListener("click", loadCodes);
+
+// ---------- releases ----------
+// The APK is read here, never uploaded: its manifest gives the package and version, and its SHA-256 and
+// size go in the release so the app can check the download. The file itself lives at the download link.
+let releases = [], apk = null;
+const mb = (n) => (n / 1048576).toFixed(1) + " MB";
+
+/** package, versionCode and versionName from an APK's binary AndroidManifest.xml. */
+function readManifest(buf) {
+  const dv = new DataView(buf);
+  let strings = [], resIds = [], off = dv.getUint16(2, true);
+  const pool = (o) => {
+    const hsz = dv.getUint16(o + 2, true), count = dv.getUint32(o + 8, true), utf8 = (dv.getUint32(o + 16, true) & 0x100) !== 0;
+    const start = o + dv.getUint32(o + 20, true), out = [];
+    for (let i = 0; i < count; i++) {
+      let p = start + dv.getUint32(o + hsz + i * 4, true);
+      if (utf8) {
+        p += (dv.getUint8(p) & 0x80) ? 2 : 1;                     // length in characters
+        let n = dv.getUint8(p); if (n & 0x80) { n = ((n & 0x7f) << 8) | dv.getUint8(p + 1); p += 2; } else p += 1;
+        out.push(new TextDecoder().decode(new Uint8Array(buf, p, n)));
+      } else {
+        let n = dv.getUint16(p, true); if (n & 0x8000) { n = ((n & 0x7fff) << 16) | dv.getUint16(p + 2, true); p += 4; } else p += 2;
+        out.push(new TextDecoder("utf-16le").decode(new Uint8Array(buf, p, n * 2)));
+      }
+    }
+    return out;
+  };
+  while (off < dv.byteLength) {
+    const type = dv.getUint16(off, true), size = dv.getUint32(off + 4, true);
+    if (type === 0x0001) strings = pool(off);
+    else if (type === 0x0180) for (let i = off + 8; i < off + size; i += 4) resIds.push(dv.getUint32(i, true));
+    else if (type === 0x0102 && strings[dv.getUint32(off + 20, true)] === "manifest") {
+      const first = off + 16 + dv.getUint16(off + 24, true), step = dv.getUint16(off + 26, true), n = dv.getUint16(off + 28, true), r = {};
+      for (let i = 0; i < n; i++) {
+        const a = first + i * step, ni = dv.getUint32(a + 4, true), raw = dv.getUint32(a + 8, true), dtype = dv.getUint8(a + 15), data = dv.getUint32(a + 16, true);
+        const name = resIds[ni] === 0x0101021b ? "versionCode" : resIds[ni] === 0x0101021c ? "versionName" : strings[ni];
+        const value = raw !== 0xffffffff ? strings[raw] : dtype === 0x03 ? strings[data] : data;
+        if (["package", "versionCode", "versionName"].includes(name)) r[name] = value;
+      }
+      return r;
+    }
+    off += size;
+  }
+  throw new Error("no manifest element");
+}
+
+async function readApk(file) {
+  const info = $("rel-info"); info.className = "apkinfo wide"; info.textContent = "Reading " + file.name + "...";
+  $("rel-publish").disabled = true; apk = null;
+  try {
+    const bytes = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(bytes);
+    const entry = zip.file("AndroidManifest.xml"); if (!entry) throw new Error("not an APK");
+    const m = readManifest(await entry.async("arraybuffer"));
+    const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const code = Number(m.versionCode);
+    if (m.package !== "app.juno") throw new Error(`it's ${m.package}, not Juno`);
+    const top = Math.max(0, ...releases.filter((r) => r.package === m.package).map((r) => r.version_code));
+    apk = { package: m.package, version_code: code, version_name: String(m.versionName || code), apk_size: file.size, apk_sha256: sha };
+    info.replaceChildren(
+      el("b", {}, "Juno "), el("b", {}, apk.version_name), ` (code ${code}) · ${mb(file.size)} · SHA-256 `, el("span", { class: "mono" }, sha.slice(0, 16) + "..."),
+      ...(code <= top ? [el("div", {}, `Code ${code} isn't above the newest published (${top}): phones won't take it. Raise versionCode in app/build.gradle.kts.`)] : []));
+    if (code <= top) { info.className = "apkinfo wide bad"; return; }
+    $("rel-publish").disabled = false;
+  } catch (e) {
+    info.className = "apkinfo wide bad"; info.textContent = "Can't read that file: " + e.message;
+  }
+}
+$("rel-file").addEventListener("change", (e) => e.target.files[0] && readApk(e.target.files[0]));
+
+$("rel-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!apk) return;
+  const channels = [...$("rel-channels").querySelectorAll("input[type=checkbox]:checked")].map((c) => c.value)
+    .concat($("rel-custom").value.split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[a-z0-9_-]{1,30}$/.test(s)));
+  const url = $("rel-url").value.trim();
+  if (!channels.length) return toast("Pick at least one channel");
+  if (!url.startsWith("https://")) return toast("The download link must start with https://");
+  const changelog = $("rel-notes").value.split("\n").map((s) => s.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+  if (!confirm(`Publish ${apk.version_name} to ${channels.join(", ")}? Phones on ${channels.length > 1 ? "those channels" : "that channel"} get offered it next time Juno opens.`)) return;
+  $("rel-publish").disabled = true;
+  const { error } = await sb.from("releases").insert({ ...apk, channels: [...new Set(channels)], changelog, apk_url: url });
+  if (error) { $("rel-publish").disabled = false; return fail(error); }
+  toast(`Published ${apk.version_name}`);
+  $("rel-form").reset(); $("rel-info").className = "apkinfo wide"; $("rel-info").textContent = "Pick the APK: I read its version and fingerprint here on your PC, nothing is uploaded.";
+  $("rel-channels").querySelectorAll("input").forEach((c) => c.disabled = false); apk = null;
+  loadReleases();
+});
+
+async function loadReleases() {
+  const { data, error } = await sb.from("releases").select("*").order("version_code", { ascending: false });
+  if (error) { $("releases").replaceChildren(el("tr", {}, el("td", { colspan: 7, class: "empty" }, "Releases aren't set up on the server yet."))); return; }
+  releases = data; drawReleases();
+}
+async function setRelease(id, change) {
+  const { error } = await sb.from("releases").update(change).eq("id", id);
+  if (error) return fail(error); loadReleases();
+}
+function drawReleases() {
+  $("n-releases").textContent = releases.length;
+  if (!releases.length) { $("releases").replaceChildren(el("tr", {}, el("td", { colspan: 7, class: "empty" }, "Nothing published yet."))); return; }
+  $("releases").replaceChildren(...releases.map((r) => el("tr", {},
+    el("td", {}, el("b", {}, r.version_name), el("div", { class: "sub" }, "code " + r.version_code)),
+    el("td", {}, r.channels.map((c) => el("span", { class: "pill " + (c === "dev" ? "dev" : c === "stable" ? "ok" : "beta"), style: "margin-right:4px" }, c)),
+      el("button", { title: "Change channels", style: "margin-left:4px;padding:2px 8px", onclick: () => {
+        const v = prompt("Channels, separated by commas (dev, beta, stable, or custom names):", r.channels.join(", "));
+        if (v === null) return;
+        const list = [...new Set(v.split(",").map((s) => s.trim().toLowerCase()).filter((s) => /^[a-z0-9_-]{1,30}$/.test(s)))];
+        if (!list.length) return toast("At least one channel");
+        setRelease(r.id, { channels: list });
+      } }, "edit")),
+    el("td", {}, r.changelog.length ? el("details", { class: "changes" }, el("summary", {}, r.changelog.length + (r.changelog.length > 1 ? " changes" : " change")), el("ul", {}, r.changelog.map((l) => el("li", {}, l)))) : el("span", { class: "sub" }, "none")),
+    el("td", { class: "num" }, el("a", { href: r.apk_url, target: "_blank", rel: "noopener", style: "color:inherit" }, mb(r.apk_size))),
+    el("td", { class: "num", title: r.published_at }, day(r.published_at)),
+    el("td", {}, el("span", { class: "pill " + (r.pulled ? "bad" : "ok") }, r.pulled ? "Pulled" : "Live")),
+    el("td", {}, el("button", { class: r.pulled ? "" : "danger", title: r.pulled ? "" : "Stop offering it; phones that installed it keep it", onclick: () => {
+      if (!r.pulled && !confirm(`Pull ${r.version_name}? Phones stop being offered it (the one before it is offered again).`)) return;
+      setRelease(r.id, { pulled: !r.pulled });
+    } }, r.pulled ? "Put back" : "Pull")),
+  )));
+}
+$("reload-releases").addEventListener("click", loadReleases);
+
+// ---------- feedback ----------
+async function loadFeedback() {
+  let q = sb.from("feedback").select("*").order("created_at", { ascending: false }).limit(200);
+  if ($("fb-kind").value) q = q.eq("kind", $("fb-kind").value);
+  const { data, error } = await q;
+  if (error) return fail(error);
+  if (!$("fb-kind").value) $("n-feedback").textContent = data.length;
+  if (!data.length) { $("feedback").replaceChildren(el("div", { class: "empty" }, "Nothing yet.")); return; }
+  $("feedback").replaceChildren(...data.map((f) => el("article", { class: "card" },
+    el("div", { class: "head" },
+      el("span", { class: "pill " + f.kind }, f.kind === "bug" ? "Bug" : (f.topic || "Feedback")),
+      el("span", { class: "title" }, f.title || "(no title)"),
+      el("span", { class: "sub", title: f.created_at }, ago(f.created_at))),
+    f.body ? el("div", { class: "body" }, f.body) : null,
+    f.files?.length ? el("div", { class: "files" }, f.files.map((path) => el("button", { onclick: async () => {
+      const { data, error } = await sb.storage.from("feedback").createSignedUrl(path, 600);
+      if (error) return fail(error); window.open(data.signedUrl, "_blank", "noopener");
+    } }, path.split("/").pop().replace(/^\d+_/, "")))) : null,
+    el("div", { class: "meta" },
+      el("span", {}, "#" + f.id), el("span", {}, f.device || ""), el("span", {}, f.app_version ? "v" + f.app_version : ""),
+      el("span", { class: "mono", title: f.device_id }, (f.device_id || "").slice(0, 12)),
+      f.discord_ok ? null : el("span", {}, "not on Discord")),
+  )));
+}
+$("fb-kind").addEventListener("change", loadFeedback);
+$("reload-feedback").addEventListener("click", loadFeedback);
+
+sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") show(); });
+show();
+</script>
+</body>
+</html>
