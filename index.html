@@ -142,7 +142,7 @@
     <div data-panel="codes" hidden>
       <div class="bar"><h2>Codes</h2><button id="reload-codes">Refresh</button></div>
       <form class="newcode" id="code-form">
-        <label>Role<select id="code-role"><option value="beta">beta</option><option value="dev">dev (Debug tab)</option></select></label>
+        <label>Role<select id="code-role"><option value="beta">beta</option><option value="stable">stable</option><option value="dev">dev (Debug tab)</option></select></label>
         <label>Phones<input id="code-uses" type="number" min="1" max="10000" value="1" required></label>
         <label class="note">Note<input id="code-note" type="text" maxlength="200" placeholder="who it's for, e.g. Discord batch 1"></label>
         <button class="primary" type="submit">Make code</button>
@@ -304,7 +304,7 @@ function drawUsers() {
   if (!list.length) { $("users").replaceChildren(el("tr", {}, el("td", { colspan: 9, class: "empty" }, users.length ? "Nobody matches that." : "No phones yet. Make a code and hand it out."))); return; }
   $("users").replaceChildren(...list.map((u) => {
     const role = el("select", { "aria-label": "Role", onchange: (e) => setDevice(u.device_id, { role: e.target.value }) },
-      el("option", { value: "beta" }, "beta"), el("option", { value: "dev" }, "dev"));
+      el("option", { value: "beta" }, "beta"), el("option", { value: "stable" }, "stable"), el("option", { value: "dev" }, "dev"));
     role.value = u.role;
     // updates: follow the role (dev -> dev builds, beta -> beta), or a channel picked here, custom ones included
     const known = ["dev", "beta", "stable"];
