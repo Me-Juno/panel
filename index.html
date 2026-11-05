@@ -319,7 +319,11 @@ function drawUsers() {
     chan.value = u.channel || "";
     const locked = u.status === "revoked";
     return el("tr", {},
-      el("td", {}, u.device || "Unknown phone", el("div", { class: "sub mono", title: u.device_id }, u.device_id.slice(0, 12))),
+      el("td", {}, u.device || "Unknown phone", el("div", { class: "sub mono", title: u.device_id }, u.device_id.slice(0, 12)),
+        // the game accounts on this phone: [TAG] name, kingdom, game ID
+        ...(Array.isArray(u.accounts) ? u.accounts : []).map((a) => el("div", { class: "sub", title: "Game ID " + a.id },
+          (a.tag ? `[${a.tag}] ` : "") + (a.name || "?") + (a.kingdom ? ` · #${a.kingdom}` : "") + (a.alliance ? ` · ${a.alliance}` : ""),
+          " ", el("span", { class: "mono" }, a.id)))),
       el("td", {}, role),
       el("td", {}, chan),
       el("td", {}, el("span", { class: "pill " + (locked ? "bad" : "ok") }, locked ? "Locked out" : "Active")),
