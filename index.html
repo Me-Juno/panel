@@ -118,6 +118,7 @@
       <button role="tab" data-tab="codes" aria-selected="false">Codes<span class="count" id="n-codes"></span></button>
       <button role="tab" data-tab="releases" aria-selected="false">Releases<span class="count" id="n-releases"></span></button>
       <button role="tab" data-tab="feedback" aria-selected="false">Feedback<span class="count" id="n-feedback"></span></button>
+      <button role="tab" data-tab="mail" aria-selected="false">Mail<span class="count" id="n-mail"></span></button>
     </nav>
     <span class="who" id="who"></span>
     <button id="passwd">Change password</button>
@@ -188,6 +189,24 @@
       </div>
       <div class="fb" id="feedback"></div>
     </div>
+
+    <div data-panel="mail" hidden>
+      <div class="bar"><h2>Mail</h2><button id="reload-mail">Refresh</button></div>
+      <form class="newcode release-form" id="mail-form">
+        <label>To<select id="mail-to"><option value="all">every phone</option><option value="some">chosen phones</option></select></label>
+        <label id="mail-later-box" style="display:flex;flex-direction:row;color:var(--text);align-items:center;gap:8px;align-self:end;padding-bottom:10px"><input type="checkbox" id="mail-later" style="width:auto"> phones that join later see it too</label>
+        <fieldset class="wide channels" id="mail-phones" hidden><legend>Phones</legend><div id="mail-phone-list"></div></fieldset>
+        <div class="apkinfo wide" id="mail-reply" hidden></div>
+        <label class="wide">Title<input id="mail-title" type="text" maxlength="80" required placeholder="Shown in bold in the Inbox"></label>
+        <label class="wide">Message<textarea id="mail-body" rows="6" maxlength="4000" required placeholder="What they read when they open it"></textarea></label>
+        <button class="primary" type="submit" id="mail-send">Send</button>
+        <span class="sub">Phones get it the next time Juno opens, or when they open the Inbox.</span>
+      </form>
+      <div class="table"><table>
+        <thead><tr><th>Sent</th><th>To</th><th>Message</th><th>Status</th><th></th></tr></thead>
+        <tbody id="mail"></tbody>
+      </table></div>
+    </div>
   </main>
 </section>
 
@@ -233,7 +252,7 @@ async function show() {
   }
   $("login").hidden = true; $("app").hidden = false;
   $("who").textContent = session.user.email;
-  loadUsers(); loadCodes(); loadReleases(); loadFeedback();
+  loadUsers(); loadCodes(); loadReleases(); loadFeedback(); loadMail();
 }
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault(); $("login-msg").textContent = "";
@@ -499,11 +518,77 @@ async function loadFeedback() {
     el("div", { class: "meta" },
       el("span", {}, "#" + f.id), el("span", {}, f.device || ""), el("span", {}, f.app_version ? "v" + f.app_version : ""),
       el("span", { class: "mono", title: f.device_id }, (f.device_id || "").slice(0, 12)),
-      f.discord_ok ? null : el("span", {}, "not on Discord")),
+      f.discord_ok ? null : el("span", {}, "not on Discord"),
+      f.device_id ? el("button", { style: "margin-left:auto", onclick: () => replyTo(f) }, "Reply in the app") : null),
   )));
 }
 $("fb-kind").addEventListener("change", loadFeedback);
 $("reload-feedback").addEventListener("click", loadFeedback);
+
+// ---------- mail ----------
+let mail = [], replying = null;
+const phoneName = (id) => { const u = users.find((x) => x.device_id === id); return u ? (u.device || "phone") + " " + id.slice(0, 6) : id.slice(0, 10); };
+function drawPhonePicker(checked = []) {
+  $("mail-phone-list").replaceChildren(...users.filter((u) => u.status === "active").map((u) =>
+    el("label", { style: "display:inline-flex;gap:6px;margin:0 14px 6px 0" },
+      el("input", { type: "checkbox", value: u.device_id, ...(checked.includes(u.device_id) ? { checked: true } : {}) }),
+      (u.device || "phone") + " · " + u.role + " · ", el("span", { class: "mono" }, u.device_id.slice(0, 8)))));
+}
+function mailMode() {
+  const some = $("mail-to").value === "some";
+  $("mail-phones").hidden = !some; $("mail-later-box").hidden = some;
+}
+$("mail-to").addEventListener("change", () => { if ($("mail-to").value === "some") drawPhonePicker(); mailMode(); });
+function replyTo(f) {
+  replying = f.id;
+  document.querySelector('nav [data-tab="mail"]').click();
+  $("mail-to").value = "some"; drawPhonePicker([f.device_id]); mailMode();
+  $("mail-reply").hidden = false;
+  $("mail-reply").replaceChildren(`Replying to #${f.id}: ${f.title || f.kind}  `, el("button", { type: "button", onclick: () => { replying = null; $("mail-reply").hidden = true; } }, "not a reply"));
+  $("mail-title").value = "Re: " + (f.title || (f.kind === "bug" ? "your bug report" : "your feedback")).slice(0, 70);
+  $("mail-body").focus();
+}
+$("mail-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const some = $("mail-to").value === "some";
+  const to = some ? [...$("mail-phone-list").querySelectorAll("input:checked")].map((c) => c.value) : null;
+  if (some && !to.length) return toast("Pick at least one phone");
+  const who = some ? (to.length === 1 ? phoneName(to[0]) : to.length + " phones") : "every phone";
+  if (!confirm(`Send "${$("mail-title").value}" to ${who}?`)) return;
+  $("mail-send").disabled = true;
+  const { error } = await sb.from("mail").insert({
+    title: $("mail-title").value.trim(), body: $("mail-body").value.trim(), to_devices: to,
+    for_new_phones: !some && $("mail-later").checked, reply_to: replying,
+  });
+  $("mail-send").disabled = false;
+  if (error) return fail(error);
+  toast("Sent to " + who);
+  $("mail-form").reset(); replying = null; $("mail-reply").hidden = true; mailMode();
+  loadMail();
+});
+async function loadMail() {
+  const { data, error } = await sb.from("mail").select("*").order("created_at", { ascending: false }).limit(300);
+  if (error) { $("mail").replaceChildren(el("tr", {}, el("td", { colspan: 5, class: "empty" }, "Mail isn't set up on the server yet."))); return; }
+  mail = data; drawMail();
+}
+function drawMail() {
+  $("n-mail").textContent = mail.length;
+  if (!mail.length) { $("mail").replaceChildren(el("tr", {}, el("td", { colspan: 5, class: "empty" }, "Nothing sent yet."))); return; }
+  $("mail").replaceChildren(...mail.map((m) => el("tr", {},
+    el("td", { class: "num", title: m.created_at }, ago(m.created_at)),
+    el("td", {}, m.to_devices ? (m.to_devices.length === 1 ? phoneName(m.to_devices[0]) : m.to_devices.length + " phones")
+      : el("span", {}, "everyone", el("div", { class: "sub" }, m.for_new_phones ? "and later phones" : "active then")),
+      m.reply_to ? el("div", { class: "sub" }, "reply to #" + m.reply_to) : null),
+    el("td", {}, el("details", { class: "changes" }, el("summary", {}, m.title), el("div", { style: "white-space:pre-wrap;margin-top:6px" }, m.body))),
+    el("td", {}, el("span", { class: "pill " + (m.pulled ? "bad" : "ok") }, m.pulled ? "Pulled" : "Live")),
+    el("td", {}, el("button", { class: m.pulled ? "" : "danger", title: m.pulled ? "" : "Phones drop it at their next check", onclick: async () => {
+      if (!m.pulled && !confirm(`Pull "${m.title}"? It disappears from phones at their next check.`)) return;
+      const { error } = await sb.from("mail").update({ pulled: !m.pulled }).eq("id", m.id);
+      if (error) return fail(error); loadMail();
+    } }, m.pulled ? "Put back" : "Pull")),
+  )));
+}
+$("reload-mail").addEventListener("click", loadMail);
 
 sb.auth.onAuthStateChange((event) => { if (event === "SIGNED_OUT") show(); });
 show();
