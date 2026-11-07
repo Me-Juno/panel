@@ -164,6 +164,8 @@
         <label class="wide">APK file<input id="rel-file" type="file" accept=".apk,application/vnd.android.package-archive" required></label>
         <div class="apkinfo wide" id="rel-info">Pick the APK: I read its version and fingerprint here on your PC, nothing is uploaded.</div>
         <label class="wide">Download link<input id="rel-url" type="url" placeholder="https://... where this exact file downloads from" required></label>
+        <label class="wide">Phone-type APKs (optional: arm64, armv7, x86_64 - updates download the phone's own)<input id="rel-abi-files" type="file" accept=".apk,application/vnd.android.package-archive" multiple></label>
+        <div class="wide" id="rel-abis"></div>
         <fieldset class="wide channels" id="rel-channels">
           <legend>Channels</legend>
           <label><input type="checkbox" value="dev"> dev</label>
@@ -393,6 +395,9 @@ $("reload-codes").addEventListener("click", loadCodes);
 // The APK is read here, never uploaded: its manifest gives the package and version, and its SHA-256 and
 // size go in the release so the app can check the download. The file itself lives at the download link.
 let releases = [], apk = null;
+// the phone-type APKs: { abi: { version_code, size, sha256 } }, each with its own link field
+let abiApks = {};
+const ABIS = ["arm64-v8a", "armeabi-v7a", "x86_64"];
 const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
 /** package, versionCode and versionName from an APK's binary AndroidManifest.xml. */
@@ -460,6 +465,30 @@ async function readApk(file) {
 }
 $("rel-file").addEventListener("change", (e) => e.target.files[0] && readApk(e.target.files[0]));
 
+/** A phone-type APK: its one lib/<abi>/ folder names the type; same package as the universal one. */
+async function readAbiApk(file) {
+  const bytes = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(bytes);
+  const entry = zip.file("AndroidManifest.xml"); if (!entry) throw new Error(file.name + " is not an APK");
+  const m = readManifest(await entry.async("arraybuffer"));
+  if (m.package !== "app.juno") throw new Error(`${file.name} is ${m.package}, not Juno`);
+  const abis = [...new Set(Object.keys(zip.files).map((n) => (n.match(/^lib\/([^/]+)\//) || [])[1]).filter(Boolean))];
+  if (abis.length !== 1 || !ABIS.includes(abis[0])) throw new Error(`${file.name} holds ${abis.join(", ") || "no"} phone types: pick the one-type APKs (app-arm64-v8a, app-armeabi-v7a, app-x86_64)`);
+  const sha = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return { abi: abis[0], version_code: Number(m.versionCode), size: file.size, sha256: sha };
+}
+$("rel-abi-files").addEventListener("change", async (e) => {
+  abiApks = {}; $("rel-abis").replaceChildren();
+  for (const file of e.target.files) {
+    try {
+      const a = await readAbiApk(file);
+      abiApks[a.abi] = a;
+      $("rel-abis").append(el("label", { class: "wide" }, `${a.abi} · code ${a.version_code} · ${mb(a.size)} - download link`,
+        el("input", { type: "url", "data-abi": a.abi, placeholder: "https://... where this exact file downloads from" })));
+    } catch (err) { toast(err.message); }
+  }
+});
+
 $("rel-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!apk) return;
@@ -468,12 +497,21 @@ $("rel-form").addEventListener("submit", async (e) => {
   const url = $("rel-url").value.trim();
   if (!channels.length) return toast("Pick at least one channel");
   if (!url.startsWith("https://")) return toast("The download link must start with https://");
+  // every phone-type APK: the universal one's build, with its own https link
+  const apks = {};
+  for (const [abi, a] of Object.entries(abiApks)) {
+    const link = ($("rel-abis").querySelector(`input[data-abi="${abi}"]`)?.value || "").trim();
+    if (a.version_code !== apk.version_code) return toast(`The ${abi} APK is code ${a.version_code}, the universal one ${apk.version_code}: pick one build's files`);
+    if (!link.startsWith("https://")) return toast(`The ${abi} link must start with https://`);
+    apks[abi] = { url: link, size: a.size, sha256: a.sha256 };
+  }
   const changelog = $("rel-notes").value.split("\n").map((s) => s.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
   if (!confirm(`Publish ${apk.version_name} to ${channels.join(", ")}? Phones on ${channels.length > 1 ? "those channels" : "that channel"} get offered it next time Juno opens.`)) return;
   $("rel-publish").disabled = true;
-  const { error } = await sb.from("releases").insert({ ...apk, channels: [...new Set(channels)], changelog, apk_url: url });
+  const { error } = await sb.from("releases").insert({ ...apk, channels: [...new Set(channels)], changelog, apk_url: url, apks });
   if (error) { $("rel-publish").disabled = false; return fail(error); }
   toast(`Published ${apk.version_name}`);
+  abiApks = {}; $("rel-abis").replaceChildren();
   $("rel-form").reset(); $("rel-info").className = "apkinfo wide"; $("rel-info").textContent = "Pick the APK: I read its version and fingerprint here on your PC, nothing is uploaded.";
   $("rel-channels").querySelectorAll("input").forEach((c) => c.disabled = false); apk = null;
   loadReleases();
